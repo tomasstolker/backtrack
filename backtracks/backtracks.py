@@ -460,11 +460,11 @@ class System():
             ra, dec, pmra, pmdec, par = param # unpacking unit cube samples
 
             # the PPF of Bailer-Jones 2015 eq. 17
-            par = 1000/transform_gengamm(par, self.L, self.alpha, self.beta) # [units of mas]
+            # par = 1000/transform_gengamm(par, self.L, self.alpha, self.beta) # [units of mas]
 
             # truncate distribution at 100 kpc (Nielsen+ 2017 do this at 10 kpc)
-            if par < 1e-2:
-                par = -np.inf
+            # if par < 1e-2:
+            #     par = -np.inf
         else:
             ra, dec, pmra, pmdec = param
 
@@ -473,8 +473,12 @@ class System():
         dec = transform_uniform(dec, self.dec0-self.unif, self.dec0+self.unif)
 
         # normal priors for proper motion
-        pmra = transform_normal(pmra, self.mu_pmra, self.sigma_pmra)
-        pmdec = transform_normal(pmdec, self.mu_pmdec, self.sigma_pmdec)
+        # pmra = transform_normal(pmra, self.mu_pmra, self.sigma_pmra)
+        # pmdec = transform_normal(pmdec, self.mu_pmdec, self.sigma_pmdec)
+
+        par = transform_uniform(par, 0., 20.)
+        pmra = transform_uniform(pmra, -50., 50.)
+        pmdec = transform_uniform(pmdec, -50., 50.)
 
         if len(param) == 11:
             param = ra, dec, pmra, pmdec, par, ra_host, dec_host, pmra_host, pmdec_host, par_host, rv_host

@@ -226,6 +226,9 @@ def trackplot(
         ra_samples[i, ], dec_samples[i, ] = radecdists(backtracks, plot_epochs_tt, post_samples[idx_item, ])
         axs['A'].plot(ra_samples[i, ], dec_samples[i, ], color='cornflowerblue', lw=0.3, alpha=0.3)
 
+    np.savetxt('background_samples_ra.dat', ra_samples)
+    np.savetxt('background_samples_dec.dat', dec_samples)
+
     # Create 1 sigma and 3 sigma percentiles for envelopes
 
     ra_quant = np.percentile(ra_samples, [0.13, 16.0, 84.0, 99.87], axis=0)
@@ -267,6 +270,8 @@ def trackplot(
         axs['B'].plot(plot_times.decimalyear, sep_best, color='black')
         axs['C'].plot(plot_times.decimalyear, pa_best, color='black')
 
+    np.savetxt('background_best.dat', np.column_stack([ra_bg, dec_bg]))
+
     # Connect data points with best-fit model epochs
 
     ra_bg_best, dec_bg_best = radecdists(backtracks, backtracks.epochs_tt, backtracks.run_median)
@@ -281,12 +286,16 @@ def trackplot(
     axs['A'].plot(ra_bg_best, dec_bg_best, color="tomato", mec='tab:gray',
                   ms=5., mew=1.5, linestyle="none", marker="o")
 
+    np.savetxt('astrometry_model.dat', np.column_stack([ra_bg_best, dec_bg_best]))
+
     # Plot data points (deltaRA, deltaDEC)
 
     axs['A'].errorbar(backtracks.ras, backtracks.decs,
                       yerr=backtracks.decserr, xerr=backtracks.raserr,
                       color="tab:gray", ecolor='tomato', mec='tomato',
                       label="Data", linestyle="none", marker="o", ms=5., mew=1.5)
+
+    np.savetxt('astrometry_data.dat', np.column_stack([backtracks.ras, backtracks.raserr, backtracks.decs, backtracks.decserr]))
 
     # Plot deltaRA/deltaDec or sep/PA as function of date
 
