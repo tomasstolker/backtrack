@@ -287,11 +287,11 @@ def trackplot(
     for i in range(len(backtracks.ras)):
         comp_ra = (backtracks.ras[i], ra_bg_best[i])
         comp_dec = (backtracks.decs[i], dec_bg_best[i])
-        axs['A'].plot(comp_ra, comp_dec, ls='-', color='tab:gray', lw=1.0)
+        axs['A'].plot(comp_ra, comp_dec, ls='--', color='tab:grey', lw=2.0)
 
     # Plot coordinates at observation epochs for best-fit parameters
 
-    axs['A'].plot(ra_bg_best, dec_bg_best, color="tomato", mec='tab:gray',
+    axs['A'].plot(ra_bg_best, dec_bg_best, color="none", mec='tab:grey',
                   ms=5., mew=1.5, linestyle="none", marker="o")
 
     np.savetxt('astrometry_model.dat', np.column_stack([ra_bg_best, dec_bg_best]))
@@ -300,8 +300,8 @@ def trackplot(
 
     axs['A'].errorbar(backtracks.ras, backtracks.decs,
                       yerr=backtracks.decserr, xerr=backtracks.raserr,
-                      color="tab:gray", ecolor='tomato', mec='tomato',
-                      label="Data", linestyle="none", marker="o", ms=5., mew=1.5)
+                      color="tomato",ecolor='darkred', linestyle="none",
+                      marker='o', ms=5., mew=1.5, mec='darkred')
 
     np.savetxt('astrometry_data.dat', np.column_stack([backtracks.ras, backtracks.raserr, backtracks.decs, backtracks.decserr]))
 
@@ -311,14 +311,14 @@ def trackplot(
         # Plot the deltaRA and deltaDec data points
 
         axs['B'].errorbar(obs_times.decimalyear, backtracks.ras,
-                          yerr=backtracks.raserr, color="tab:gray",
-                          ecolor='tomato', linestyle="none",
-                          marker='o', ms=5., mew=1.5, mec='tomato')
+                          yerr=backtracks.raserr, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
         axs['C'].errorbar(obs_times.decimalyear, backtracks.decs,
-                          yerr=backtracks.decserr, color="tab:gray",
-                          ecolor='tomato', linestyle="none",
-                          marker='o', ms=5., mew=1.5, mec='tomato')
+                          yerr=backtracks.decserr, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
     else:
         # Plot the sep and PA data points
@@ -332,14 +332,14 @@ def trackplot(
             obs_pa_err = np.degrees(obs_sep_err/obs_sep)
 
             axs['B'].errorbar(obs_times[~corr_terms].decimalyear, obs_sep,
-                              yerr=obs_sep_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_sep_err, color="tomato",
+                              ecolor='darkred', linestyle="none",
+                              marker='o', ms=5., mew=1.5, mec='darkred')
 
             axs['C'].errorbar(obs_times[~corr_terms].decimalyear, obs_pa,
-                              yerr=obs_pa_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_pa_err, color="tomato",
+                              ecolor='darkred', linestyle="none",
+                              marker='o', ms=5., mew=1.5, mec='darkred')
 
         if np.sum(corr_terms) > 0:
             # Plot the sep and PA data points that are corr_terms
@@ -357,14 +357,14 @@ def trackplot(
                     backtracks.rho[corr_terms][i], radec2seppa)
 
             axs['B'].errorbar(obs_times[corr_terms].decimalyear, obs_sep,
-                              yerr=obs_sep_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_sep_err, color="tomato",
+                              ecolor='darkred', linestyle="none",
+                              marker='o', ms=5., mew=1.5, mec='darkred')
 
             axs['C'].errorbar(obs_times[corr_terms].decimalyear, obs_pa,
-                              yerr=obs_pa_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_pa_err, color="tomato",
+                              ecolor='darkred', linestyle="none",
+                              marker='o', ms=5., mew=1.5, mec='darkred')
 
     axs['A'].invert_xaxis()
     axs['A'].axis('equal')
@@ -506,18 +506,18 @@ def stationtrackplot(
     for i in range(len(backtracks.ras)):
         comp_ra = (backtracks.ras[i], ra_bg_best[i])
         comp_dec = (backtracks.decs[i], dec_bg_best[i])
-        axs['A'].plot(comp_ra, comp_dec, ls='-', color='tab:gray', lw=1.0)
+        axs['A'].plot(comp_ra, comp_dec, ls='--', color='tab:grey', lw=2.0)
 
     # Plot coordinates at observation epochs for best-fit parameters
 
-    axs['A'].plot(ra_bg_best, dec_bg_best, color="tomato", mec='tab:gray',
+    axs['A'].plot(ra_bg_best, dec_bg_best, color="none", mec='tab:grey',
                   ms=5., mew=1.5, linestyle="none", marker="o")
 
     # Plot data points (deltaRA, deltaDEC)
 
     axs['A'].errorbar(backtracks.ras, backtracks.decs,
                       yerr=backtracks.decserr, xerr=backtracks.raserr,
-                      color="tab:gray", ecolor='tomato', mec='tomato',
+                      color="tomato", ecolor='darkred', mec='darkred',
                       label="Data", linestyle="none", marker="o", ms=5., mew=1.5)
 
     # Plot deltaRA/deltaDec or sep/PA as function of date
@@ -526,14 +526,14 @@ def stationtrackplot(
         # Plot the deltaRA and deltaDec data points
 
         axs['B'].errorbar(obs_times.decimalyear, backtracks.ras,
-                          yerr=backtracks.raserr, color="tab:gray",
-                          ecolor='tomato', linestyle="none",
-                          marker='o', ms=5., mew=1.5, mec='tomato')
+                          yerr=backtracks.raserr, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
         axs['C'].errorbar(obs_times.decimalyear, backtracks.decs,
-                          yerr=backtracks.decserr, color="tab:gray",
-                          ecolor='tomato', linestyle="none",
-                          marker='o', ms=5., mew=1.5, mec='tomato')
+                          yerr=backtracks.decserr, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
     else:
         # Plot the sep and PA data points
@@ -547,14 +547,14 @@ def stationtrackplot(
             obs_pa_err = np.degrees(obs_sep_err/obs_sep)
 
             axs['B'].errorbar(obs_times[~corr_terms].decimalyear, obs_sep,
-                              yerr=obs_sep_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_sep_err, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
             axs['C'].errorbar(obs_times[~corr_terms].decimalyear, obs_pa,
-                              yerr=obs_pa_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_pa_err, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
         if np.sum(corr_terms) > 0:
             # Plot the sep and PA data points that are corr_terms
@@ -572,14 +572,14 @@ def stationtrackplot(
                     backtracks.rho[corr_terms][i], radec2seppa)
 
             axs['B'].errorbar(obs_times[corr_terms].decimalyear, obs_sep,
-                              yerr=obs_sep_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_sep_err, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
             axs['C'].errorbar(obs_times[corr_terms].decimalyear, obs_pa,
-                              yerr=obs_pa_err, color="tab:gray",
-                              ecolor='tomato', linestyle="none",
-                              marker='o', ms=5., mew=1.5, mec='tomato')
+                              yerr=obs_pa_err, color="tomato",
+                          ecolor='darkred', linestyle="none",
+                          marker='o', ms=5., mew=1.5, mec='darkred')
 
     axs['A'].invert_xaxis()
     axs['A'].axis('equal')

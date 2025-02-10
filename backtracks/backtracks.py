@@ -31,7 +31,7 @@ from novas.compat.eph_manager import ephem_open
 
 from schwimmbad import MPIPool
 
-from backtracks.utils import pol2car, transform_gengamm, transform_normal, transform_uniform, utc2tt, HostStarPriors, radecdists
+from backtracks.utils import pol2car, transform_gengamm, transform_normal, transform_uniform, iso2mjd, utc2tt, HostStarPriors, radecdists
 from backtracks.plotting import diagnostic, neighborhood, plx_prior, posterior, trackplot, stationtrackplot
 
 
@@ -50,10 +50,13 @@ class System():
         nearby_window (float): Default 0.5 [degrees]
         fileprefix (str): Prefix to filename. Default "./" for current folder.
         ndim (int): Number of dimensions that need to be fit. Default: 11
+        **relax_pm_priors (bool): Instead of using normal distribution based on nearby Gaia data, set a wide uniform prior on pm_ra and pm_dec based on the Gaia data over the interval (-10sigma, +10 sigma) mas/yr.
+        **relax_par_priors (bool): Instead of using the Bailer-Jones inverse gamma prior on parallax based on Gaia data, set a wide uniform prior on parallax over the interval (1e-2, host_star_plx) mas.
         **rv_host_method (str): {'normal','uniform'} Uses Gaia DR3 retrieved RV and normal distribution as Host star RV prior as default if not defined.
         **rv_host_params (tuple of floats): (lower_limit,upper_limit) for uniform rv_host_method, (mu,sigma) for normal rv_host_method. [km/s]
         **unif (float): Sets bounds for uniform prior around estimated candidate companion location. Defaults to 5e-3 if not defined. [degrees]
         **ref_epoch_idx (int): ID of datapoint at which to pin stationary tracks. Defaults to 0 if not defined. Follows order of candidate_file datapoints.
+        **query_file (str): Name of the FITS file with the Gaia query output. This file is created when running backtracks for the first time on a ``target_name``. Adding the filename will skip the query of the Gaia archive.
     """
 
     def __init__(self, target_name: str, candidate_file: str, nearby_window: float = 0.5, fileprefix = './', ndim = 11, **kwargs):
@@ -62,10 +65,35 @@ class System():
         self.fileprefix = fileprefix
         self.ndim = ndim
 
+        # planet candidate astrometry
+        # input is formatted following orbitize!, epoch, object, ra, dec, raerr, decerr, rho, quant_type; see example csv files
+        candidate = pd.read_csv(candidate_file)
+
+        if 'obj_num' in kwargs:
+            # you may include multiple object numbers in the "orbitize-like" formatted input
+            # e.g. if you have multiple candidate sources in the field and put them in the save csv
+            self.obj_num = kwargs['obj_num']
+        else:
+            # assume object = 1
+            self.obj_num = 1
+        print(f'[BACKTRACKS INFO]: Examining object = {self.obj_num} in input file.')
+        candidate = candidate[candidate['object']==self.obj_num]
+
         if 'unif' in kwargs:
             self.unif = kwargs['unif']
         else:
             self.unif = 5e-3
+
+        if 'relax_pm_priors' in kwargs:
+            self.relax_pm_priors = kwargs['relax_pm_priors']
+        else:
+            self.relax_pm_priors = False
+
+        if 'relax_par_priors' in kwargs:
+            self.relax_par_priors = kwargs['relax_par_priors']
+        else: 
+            self.relax_par_priors = False
+
         if 'rv_host_method' in kwargs:
              if 'rv_host_params' not in kwargs:
                  raise Exception("'rv_host_method' is set. Please provide (mu,sigma) or (lower,upper) in km/s in 'rv_host_params'")
@@ -85,10 +113,7 @@ class System():
 
         self.gaia_epoch = None
 
-        # planet candidate astrometry
-        candidate = pd.read_csv(candidate_file)
-
-        astrometry = np.zeros((6, len(candidate))) # epoch, ra, dec, raerr, decerr, rho
+        astrometry = np.zeros((6, len(candidate))) # epoch, ra, dec, raerr, decerr, rho, quant_type
 
         for i,quant in enumerate(candidate['quant_type']):
             if quant=='radec':
@@ -105,6 +130,10 @@ class System():
 
                 if np.isnan(rho):
                     rho2 = np.nan
+            
+            if 'yy_epochs' in kwargs:
+                if kwargs['yy_epochs']:
+                    epoch = iso2mjd(epoch)
 
             astrometry[0, i] += epoch + 2400000.5  # MJD to JD
             astrometry[1, i] += ra
@@ -211,7 +240,7 @@ class System():
         self.stationary_chi2_red = -2.*self.stationary_loglike/((2*(len(self.epochs)-1))-self.ndim)
 
         jd_start, jd_end, number = ephem_open()
-        print('[BACKTRACK INFO]: Opened ephemeris file')
+        print('[BACKTRACKS INFO]: Opened ephemeris file')
         # if the novas_de405 package is installed this will load the ephemerids file,
         # this will handle nutation, precession, gravitational lensing by (and barycenter motion induced by?) solar system bodies, etc.
         # ephem_open("DE440.bin")
@@ -227,10 +256,10 @@ class System():
             self.host_cat = novas.make_cat_entry(star_name="host",catalog="HIP",star_num=1,ra=self.rao/15.,
                                              dec=self.deco,pm_ra=self.pmrao,pm_dec=self.pmdeco,
                                              parallax=self.paro,rad_vel=self.radvelo)
-            print('[BACKTRACK INFO]: made cat entry for host')
+            print('[BACKTRACKS INFO]: made cat entry for host')
             self.host_icrs = novas.transform_cat(option=1, incat=self.host_cat, date_incat=self.gaia_epoch,
                                              date_newcat=2000., newcat_id="HIP")
-            print('[BACKTRACK INFO]: transformed cat entry for host')
+            print('[BACKTRACKS INFO]: transformed cat entry for host')
 
         # this converts the Epoch from the Gaia ref_epoch (2016 for DR3) to 2000 following ICRS
 
@@ -240,7 +269,7 @@ class System():
         """
 
         # initial estimate for background star scenario (best guesses)
-        print(f'[BACKTRACK INFO]: Estimating candidate position if stationary in RA,Dec @ {self.gaia_epoch} from observation #'+str(self.ref_epoch_idx))
+        print(f'[BACKTRACKS INFO]: Estimating candidate position if stationary in RA,Dec @ {self.gaia_epoch} from observation #'+str(self.ref_epoch_idx))
         # we'll do a rough estimate using astropy, then minimize the distance between
         # the novas projection and the specified observation using scipy's BFGS with
         # RA,DEC @ Gaia epoch as free parameters.
@@ -304,14 +333,14 @@ class System():
 
         # resolve target in simbad
         target_result_table = Simbad.query_object(self.target_name)
-        print(f'[BACKTRACK INFO]: Resolved the target star \'{self.target_name}\' in Simbad!')
+        print(f'[BACKTRACKS INFO]: Resolved the target star \'{self.target_name}\' in Simbad!')
         # target_result_table.pprint()
         # get gaia ID from simbad
         gaia_id = None
         for target_id in Simbad.query_objectids(self.target_name)['ID']:
             if f'Gaia {self.gaia_release}' in target_id:
                 gaia_id = int(target_id.replace(f'Gaia {self.gaia_release}', ''))
-                print('[BACKTRACK INFO]: Resolved target\'s Gaia ID '
+                print('[BACKTRACKS INFO]: Resolved target\'s Gaia ID '
                       f'from Simbad, Gaia {self.gaia_release} {gaia_id}')
 
         if gaia_id is None:
@@ -331,7 +360,7 @@ class System():
         else:
             target_gaia = target_gaia[target_gaia['SOURCE_ID']==gaia_id]
         self.gaia_epoch = target_gaia['ref_epoch'][0]
-        print(f'[BACKTRACK INFO]: gathered Gaia {self.gaia_release} data for {self.target_name}')
+        print(f'[BACKTRACKS INFO]: gathered Gaia {self.gaia_release} data for {self.target_name}')
         print(f'   * Gaia source ID = {gaia_id}')
         print(f'   * Reference epoch = {self.gaia_epoch}')
         print(f'   * RA = {target_gaia["ra"][0]:.4f} deg')
@@ -348,8 +377,8 @@ class System():
         width = u.Quantity(nearby_window, u.deg)
         height = u.Quantity(nearby_window, u.deg)
         nearby = Gaia.query_object_async(coordinate=coord, width=width, height=height, columns=columns)
-        print(rf'[BACKTRACK INFO]: gathered {len(nearby)} Gaia objects from the {nearby_window} sq. deg. nearby {self.target_name}')
-        print('[BACKTRACK INFO]: Finished nearby background gaia statistics')
+        print(rf'[BACKTRACKS INFO]: gathered {len(nearby)} Gaia objects from the {nearby_window} sq. deg. nearby {self.target_name}')
+        print('[BACKTRACKS INFO]: Finished nearby background gaia statistics')
 
         # return table of nearby objects, target's gaia id, and table of target
         return nearby, gaia_id, target_gaia
@@ -378,7 +407,7 @@ class System():
         self.alpha = distance_prior_params['GGDalpha'].values[0]
         self.beta = distance_prior_params['GGDbeta'].values[0]
 
-        print(f'[BACKTRACK INFO]: Queried distance prior parameters, L={self.L:.2f}, alpha={self.alpha:.2f}, beta={self.beta:.2f}')
+        print(f'[BACKTRACKS INFO]: Queried distance prior parameters, L={self.L:.2f}, alpha={self.alpha:.2f}, beta={self.beta:.2f}')
 
     def fmodel(self, param):
         """
@@ -445,43 +474,51 @@ class System():
         param = np.array(u) # copy u
 
         if len(param) == 11:
+            # unpacking unit cube samples
             ra, dec, pmra, pmdec, par, ra_host, dec_host, pmra_host, pmdec_host, par_host, rv_host = param
 
+            # normal priors for host star
             ra_host, dec_host, pmra_host, pmdec_host, par_host = self.HostStarPriors.transform_normal_multivariate(np.c_[ra_host,dec_host,pmra_host,pmdec_host,par_host])
+
             if self.rv_host_method == 'uniform':
+                # uniform prior for RV
                 rv_host = transform_uniform(rv_host, self.rv_lower, self.rv_upper)
-            else: # rv_host_method == 'normal' or 'gaia'
+            else:
+                # normal prior for RV
+                # rv_host_method == 'normal' or 'gaia'
                 rv_host = transform_normal(rv_host, self.radvelo, self.sig_rv)
-            # truncate distribution at 100 kpc (Nielsen+ 2017 do this at 10 kpc)
-            par = 1000/transform_gengamm(par, self.L, self.alpha, self.beta) # [units of mas]
-            if par < 1e-2:
-                par = -np.inf
+
         elif len(param) == 5:
-            ra, dec, pmra, pmdec, par = param # unpacking unit cube samples
+            # unpacking unit cube samples
+            ra, dec, pmra, pmdec, par = param
 
-            # the PPF of Bailer-Jones 2015 eq. 17
-            par = 1000/transform_gengamm(par, self.L, self.alpha, self.beta) # [units of mas]
-
-            # truncate distribution at 100 kpc (Nielsen+ 2017 do this at 10 kpc)
-            if par < 1e-2:
-                par = -np.inf
-        elif len(param) == 4:
-            ra, dec, pmra, pmdec = param
         else:
-            ra, dec = param
+            # unpacking unit cube samples
+            ra, dec, pmra, pmdec = param
+            par = None
 
         # uniform priors for RA and Dec
         ra = transform_uniform(ra, self.ra0-self.unif, self.ra0+self.unif)
         dec = transform_uniform(dec, self.dec0-self.unif, self.dec0+self.unif)
 
-        # uniform priors proper motion and parallax
-        # pmra = transform_uniform(pmra, -50., 50.)
-        # pmdec = transform_uniform(pmdec, -50., 50.)
-        # par = transform_uniform(par, 0., 20.)
+        if self.relax_pm_priors:
+            # uniform priors for proper motion
+            pmra = transform_uniform(pmra, self.mu_pmra-(10*self.sigma_pmra), self.mu_pmra+(10*self.sigma_pmra))
+            pmdec = transform_uniform(pmdec, self.mu_pmdec-(10*self.sigma_pmdec), self.mu_pmdec+(10*self.sigma_pmdec))
+        else:
+            # normal priors for proper motion
+            pmra = transform_normal(pmra, self.mu_pmra, self.sigma_pmra)
+            pmdec = transform_normal(pmdec, self.mu_pmdec, self.sigma_pmdec)
 
-        # normal priors for proper motion
-        pmra = transform_normal(pmra, self.mu_pmra, self.sigma_pmra)
-        pmdec = transform_normal(pmdec, self.mu_pmdec, self.sigma_pmdec)
+        if self.relax_par_priors:
+            par = transform_uniform(par, 1e-2, self.paro)
+        elif par is not None:
+            # ndim = 5 or ndim = 11
+            # the PPF of Bailer-Jones 2015 eq. 17
+            par = 1000/transform_gengamm(par, self.L, self.alpha, self.beta) # [units of mas]
+            # truncate distribution at 100 kpc (Nielsen+ 2017 do this at 10 kpc)
+            if par < 1e-2:
+                par = -np.inf
 
         if len(param) == 11:
             param = ra, dec, pmra, pmdec, par, ra_host, dec_host, pmra_host, pmdec_host, par_host, rv_host
@@ -511,7 +548,7 @@ class System():
             results (object): samples of fit
         """
 
-        print('[BACKTRACK INFO]: Beginning sampling')
+        print('[BACKTRACKS INFO]: Beginning sampling')
         ndim = self.ndim
 
         if not mpi_pool:
@@ -641,8 +678,9 @@ class System():
 
         save_dict = {'med': self.run_median, 'quant': self.run_quant, 'results': self.results}
         target_label = self.target_name.replace(' ','_')
-        file_name = f'{fileprefix}{target_label}_dynestyrun_results.pkl'
-        print('[BACKTRACK INFO]: Saving results to {}'.format(file_name))
+        object_label = f"cc{self.obj_num}"
+        file_name = f'{fileprefix}{target_label}_{object_label}_dynestyrun_results.pkl'
+        print('[BACKTRACKS INFO]: Saving results to {}'.format(file_name))
         pickle.dump(save_dict, open(file_name, "wb"))
 
     def load_results(self, fileprefix: str = './'):
@@ -654,7 +692,7 @@ class System():
         """
         target_label = self.target_name.replace(' ', '_')
         file_name = f'{fileprefix}{target_label}_dynestyrun_results.pkl'
-        print('[BACKTRACK INFO]: Loading results from {}'.format(file_name))
+        print('[BACKTRACKS INFO]: Loading results from {}'.format(file_name))
         save_dict = pickle.load(open(file_name, "rb"))
         self.run_median = save_dict['med']
         self.run_quant = save_dict['quant']
@@ -691,7 +729,7 @@ class System():
             tuple of figures: data and model tracks, posterior cornerplot, dynesty summary, parallax prior, gaia neighbourhood
         """
 
-        print('[BACKTRACK INFO]: Generating Plots')
+        print('[BACKTRACKS INFO]: Generating Plots')
         ref_epoch = Time(self.ref_epoch, format='jd')
 
         fig_track = trackplot(
@@ -710,7 +748,7 @@ class System():
         fig_diag = diagnostic(self, fileprefix=fileprefix, filepost=filepost)
         fig_prior = plx_prior(self, fileprefix=fileprefix, filepost=filepost)
         fig_hood = neighborhood(self, fileprefix=fileprefix, filepost=filepost)
-        print('[BACKTRACK INFO]: Plots saved to {}'.format(fileprefix))
+        print('[BACKTRACKS INFO]: Plots saved to {}'.format(fileprefix))
         return fig_track, fig_post, fig_diag, fig_prior, fig_hood
 
     def generate_stationary_plot(
@@ -738,7 +776,7 @@ class System():
             fig_track (figure): Figure object corresponding to the saved plot.
         """
 
-        print('[BACKTRACK INFO]: Generating Stationary plot')
+        print('[BACKTRACKS INFO]: Generating Stationary plot')
         ref_epoch = Time(self.ref_epoch, format='jd')
 
         fig_track = stationtrackplot(
@@ -751,5 +789,5 @@ class System():
             fileprefix=fileprefix,
             filepost=filepost
         )
-        print('[BACKTRACK INFO]: Stationary plot saved to {}'.format(fileprefix))
+        print('[BACKTRACKS INFO]: Stationary plot saved to {}'.format(fileprefix))
         return fig_track
