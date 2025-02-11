@@ -492,6 +492,13 @@ class System():
             # unpacking unit cube samples
             ra, dec, pmra, pmdec, par = param
 
+        elif len(param) == 2:
+            # unpacking unit cube samples
+            ra, dec = param
+            pmra = None
+            pmdec = None
+            par = None
+
         else:
             # unpacking unit cube samples
             ra, dec, pmra, pmdec = param
@@ -505,13 +512,14 @@ class System():
             # uniform priors for proper motion
             pmra = transform_uniform(pmra, self.mu_pmra-(10*self.sigma_pmra), self.mu_pmra+(10*self.sigma_pmra))
             pmdec = transform_uniform(pmdec, self.mu_pmdec-(10*self.sigma_pmdec), self.mu_pmdec+(10*self.sigma_pmdec))
-        else:
+        elif pmra is not None:
             # normal priors for proper motion
             pmra = transform_normal(pmra, self.mu_pmra, self.sigma_pmra)
             pmdec = transform_normal(pmdec, self.mu_pmdec, self.sigma_pmdec)
 
         if self.relax_par_priors:
             par = transform_uniform(par, 1e-2, self.paro)
+            # par = transform_uniform(par, 0., 2.)
         elif par is not None:
             # ndim = 5 or ndim = 11
             # the PPF of Bailer-Jones 2015 eq. 17
